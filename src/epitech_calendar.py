@@ -1,19 +1,60 @@
 #!/usr/bin/env python3
 
-import requests
 from datetime import datetime, timedelta
+import undetected_chromedriver as webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
+import json
+from time import sleep
 
+def add_headless(options):
+    options.add_argument('--headless=new')
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
 
-headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
-}
+# Creates the driver with all the appropriate options. You can remove the call
+# to add_headless for debug/to connect to your microsoft account
+def create_driver(data_path, profile_dir):
+    webdriver.TARGET_VERSION = 94
 
+    service = Service(ChromeDriverManager().install())
+    options = webdriver.ChromeOptions()
+    add_headless(options)
+    options.add_argument(f"--user-data-dir={data_path}")
+    options.add_argument(f"--profile-directory={profile_dir}")
+    user_agent = "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
+    options.add_argument(f"--user-agent={user_agent}")
+    driver = webdriver.Chrome(service=service, options=options)
+    return driver
 
-def get_epitech_login(epitechCookie):
+# initialize the connection with Epitech intra and wait for the end of the anti-ddos check
+def bypass_anti_ddos(driver):
+    url = 'https://intra.epitech.eu/'
+    driver.get(url)
+    sleep(30)
+
+def get_data_from_driver(driver):
+    wait = WebDriverWait(driver, 20, poll_frequency=2.5)
+    element = wait.until(EC.presence_of_element_located((By.TAG_NAME, 'pre')))
+    data = json.loads(element.text)
+    return data
+
+def get_epitech_login(epitechCookie, driver: webdriver.Chrome):
     url = 'https://intra.epitech.eu/user/?format=json'
-    user_data = requests.get(url, cookies={'user': epitechCookie}, headers=headers).json()
-    return user_data['login']
-
+    driver.add_cookie({"name": "user", "value": epitechCookie})
+    driver.get(url)
+    data = get_data_from_driver(driver)
+    try:
+        driver.get(data.get('office_auth_uri'))
+        data = get_data_from_driver(driver)
+    except (ValueError, KeyError):
+        pass
+    return data['login']
 
 # get_all_epitech_events() => all after one month before today
 # get_all_epitech_events(start) => all after start
@@ -76,20 +117,27 @@ def get_other_calendars_event_codes(events):
 # start null => all after start
 # end null => all in one month before end and end
 
-def get_all_epitech_events(epitechCookie, start: datetime = None, end: datetime = None):
+def get_all_epitech_events(epitechCookie, driver, start: datetime = None, end: datetime = None):
     url = 'https://intra.epitech.eu/planning/load?format=json'
     if start is not None:
         url += '&start=' + start.strftime('%Y-%m-%d')
     if end is not None:
         url += '&end=' + end.strftime('%Y-%m-%d')
-    return requests.get(url, cookies={'user': epitechCookie}, headers=headers).json()
-
+    driver.add_cookie({"name": "user", "value": epitechCookie})
+    driver.get(url)
+    data = get_data_from_driver(driver)
+    try:
+        driver.get(data.get('office_auth_uri'))
+        data = get_data_from_driver(driver)
+    except (ValueError, KeyError):
+        pass
+    return data
 
 # same as get_all_epitech_events but keep only registered epitech events
 # /!\ english delivery not marked as registered
 
-def get_my_epitech_events(epitechAutologin, start=None, end=None):
-    events = get_all_epitech_events(epitechAutologin, start=start, end=end)
+def get_my_epitech_events(epitechAutologin, driver, start=None, end=None):
+    events = get_all_epitech_events(epitechAutologin, driver, start=start, end=end)
     events_registered = []
     for event in events:
         if 'scolaryear' in event:
@@ -103,17 +151,25 @@ def get_my_epitech_events(epitechAutologin, start=None, end=None):
 # get_all_epitech_activities(end) => all in one month before end and end
 
 
-def get_all_epitech_activities(epitechCookie, start=None, end=None):
+def get_all_epitech_activities(epitechCookie, driver, start=None, end=None):
     start, end = compute_start_end(start, end)
 
     url = f'https://intra.epitech.eu/module/board/?format=json&start={start.strftime("%Y-%m-%d")}&end={end.strftime("%Y-%m-%d")}'
-    return requests.get(url, cookies={'user': epitechCookie}, headers=headers).json()
+    driver.add_cookie({"name": "user", "value": epitechCookie})
+    driver.get(url)
+    data = get_data_from_driver(driver)
+    try:
+        driver.get(data.get('office_auth_uri'))
+        data = get_data_from_driver(driver)
+    except (ValueError, KeyError):
+        pass
+    return data
 
 
 # same as get_all_epitech_activities but keep only registered projects
 
-def get_my_epitech_projects(epitechAutologin, start=None, end=None):
-    activities = get_all_epitech_activities(epitechAutologin, start, end)
+def get_my_epitech_projects(epitechAutologin, driver, start=None, end=None):
+    activities = get_all_epitech_activities(epitechAutologin, driver, start, end)
     projets = []
 
     for activity in activities:
@@ -126,9 +182,17 @@ def get_my_epitech_projects(epitechAutologin, start=None, end=None):
 
 # get all events un a module (module_name is scolaryear/codemodule/codeinstance)
 
-def get_module_activities(epitechCookie, module_name):
+def get_module_activities(epitechCookie, driver, module_name):
     url = f'https://intra.epitech.eu/module/{module_name}/?format=json'
-    return requests.get(url, cookies={'user': epitechCookie}, headers=headers).json()['activites']
+    driver.add_cookie({"name": "user", "value": epitechCookie})
+    driver.get(url)
+    data = get_data_from_driver(driver)
+    try:
+        driver.get(data.get('office_auth_uri'))
+        data = get_data_from_driver(driver)
+    except (ValueError, KeyError):
+        pass
+    return data['activites']
 
 
 def is_assistant(epitechLogin, event):
@@ -168,9 +232,9 @@ def format_assistant_event(activity, event, session_id, module_name):
 
 # same as get_all_epitech_activities but keep only assistant events
 
-def get_my_assistant_events(epitechAutologin, epitechLogin, start=None, end=None):
+def get_my_assistant_events(epitechAutologin, epitechLogin, driver, start=None, end=None):
     start, end = compute_start_end(start, end)
-    events = get_all_epitech_activities(epitechAutologin, start=start, end=end)
+    events = get_all_epitech_activities(epitechAutologin, driver, start=start, end=end)
     assistant_events = []
 
     modules_names = []
@@ -180,7 +244,7 @@ def get_my_assistant_events(epitechAutologin, epitechLogin, start=None, end=None
             if module_name not in modules_names:
                 modules_names.append(module_name)
     for module_name in modules_names:
-        module_activities = get_module_activities(epitechAutologin, module_name)
+        module_activities = get_module_activities(epitechAutologin, driver, module_name)
         for module_activity in module_activities:
             for session_id in range(len(module_activity['events'])):
                 module_activity_event = module_activity['events'][session_id]
@@ -198,8 +262,8 @@ def get_my_assistant_events(epitechAutologin, epitechLogin, start=None, end=None
 
 # same as get_all_epitech_events but keep only other calendar events
 
-def get_epitech_other_calendars_events(epitechAutologin, start=None, end=None):
-    events = get_all_epitech_events(epitechAutologin, start=start, end=end)
+def get_epitech_other_calendars_events(epitechAutologin, driver, start=None, end=None):
+    events = get_all_epitech_events(epitechAutologin, driver, start=start, end=end)
     other_calendars_events = []
     for event in events:
         if 'id_calendar' in event and 'id' in event:
@@ -209,8 +273,8 @@ def get_epitech_other_calendars_events(epitechAutologin, start=None, end=None):
 
 # same as get_all_epitech_events but keep only registered other calendar events
 
-def get_my_epitech_other_calendars_events(epitechAutologin, start=None, end=None):
-    other_calendars_events = get_epitech_other_calendars_events(epitechAutologin, start=start, end=end)
+def get_my_epitech_other_calendars_events(epitechAutologin, driver, start=None, end=None):
+    other_calendars_events = get_epitech_other_calendars_events(epitechAutologin, driver, start=start, end=end)
     other_calendars_events_registered = []
     for event in other_calendars_events:
         if 'event_registered' in event and event['event_registered'] not in [None, False]:

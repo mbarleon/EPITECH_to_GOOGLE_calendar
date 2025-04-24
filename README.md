@@ -8,10 +8,10 @@ Synchronize your Epitech calendar with Google!
   - [x] Update modified events / Remove canceled events
   - [x] Display location and link of event and mails of teaching assistants in google event description
   - [x] Display only the selected slot for multi-slots events
-  - [x] Project timeline
-  - [x] Fetch events the events which you supervise (HUB acti for example)
+  - [ ] Project timeline
+  - [ ] Fetch events the events which you supervise (HUB acti for example)
   - [x] Fetch registered events from private epitech calendars
-  - [x] Support multi epitech accounts (great for AERs who have two epitech accounts and calendars)
+  - [ ] Support multi epitech accounts (great for AERs who have two epitech accounts and calendars)
 
 # Example
 
@@ -57,7 +57,9 @@ Create a `config.json` file (from `config-sample.json`) with the following conte
         "calendarID_events": "...@group.calendar.google.com",
         "calendarID_timeline": "...@group.calendar.google.com",
         "calendarID_teaching_team": "...@group.calendar.google.com",
-        "calendarID_other_calendars": "...@group.calendar.google.com"
+        "calendarID_other_calendars": "...@group.calendar.google.com",
+        "google_user_data_path": "C:\\Users\\...\\AppData\\Local\\Google\\Chrome\\User Data",
+        "google_profile": "Default"
     }
 ]
 ```
@@ -68,6 +70,10 @@ Create a `config.json` file (from `config-sample.json`) with the following conte
  - `calendarID_timeline` is the calendar in which you want to put projects timeline
  - `calendarID_teaching_team` is the calendar in which you want to put events which you supervise (HUB activities for example)
  - `calendarID_other_calendars` is the calendar in which you want to put events registered in your private epitech calendars
+ - `google_user_data_path` is the path of your chrome user data folder
+ - `google_profile` is the folder where your user profile is stored
+
+The `calendarID_timeline`and `calendarID_teaching_team` are currently disabled because the intra does not let you do a lot of requests and they are less useful to me.
 
 If you don't want some events you can delete line in `config.json` or set value to `null`.
 If you want to put all events in only one calendarID you can by using the same calendarID.
